@@ -58,27 +58,17 @@ stop(Name) ->
 %%     Option = {name, atom()} | {ip, string() | tuple()} | {backlog, integer()}
 %%              | {nodelay, boolean()} | {acceptor_pool_size, integer()}
 %%              | {ssl, boolean()} | {profile_fun, undefined | (Props) -> ok}
-%%              | {link, false} | {recbuf, undefined | non_negative_integer()}
+%%              | {link, false} | {recbuf, non_negative_integer()}
 %% @doc Start a mochiweb server.
 %%      profile_fun is used to profile accept timing.
 %%      After each accept, if defined, profile_fun is called with a proplist of a subset of the mochiweb_socket_server state and timing information.
 %%      The proplist is as follows: [{name, Name}, {port, Port}, {active_sockets, ActiveSockets}, {timing, Timing}].
 %% @end
 start(Options) ->
-    ok = ensure_started(mochiweb_clock),
     mochiweb_socket_server:start(parse_options(Options)).
 
 start_link(Options) ->
-    ok = ensure_started(mochiweb_clock),
     mochiweb_socket_server:start_link(parse_options(Options)).
-
-ensure_started(M) ->
-    case M:start() of
-        {ok, _Pid} ->
-            ok;
-        {error, {already_started, _Pid}} ->
-            ok
-    end.
 
 loop(Socket, Opts, Body) ->
     ok = mochiweb_socket:exit_if_closed(mochiweb_socket:setopts(Socket, [{packet, http}])),
@@ -97,11 +87,11 @@ request(Socket, Opts, Body) ->
         {tcp_closed, _} ->
             mochiweb_socket:close(Socket),
             exit(normal);
-        {tcp_error, _, emsgsize} = Other ->
-            handle_invalid_msg_request(Other, Socket, Opts);
         {ssl_closed, _} ->
             mochiweb_socket:close(Socket),
-            exit(normal)
+            exit(normal);
+        Other ->
+            handle_invalid_msg_request(Other, Socket, Opts)
     after ?REQUEST_RECV_TIMEOUT ->
         mochiweb_socket:close(Socket),
         exit(normal)
@@ -129,7 +119,7 @@ headers(Socket, Opts, Request, Headers, Body, HeaderCount) ->
         {tcp_closed, _} ->
             mochiweb_socket:close(Socket),
             exit(normal);
-        {tcp_error, _, emsgsize} = Other ->
+        Other ->
             handle_invalid_msg_request(Other, Socket, Opts, Request, Headers)
     after ?HEADERS_RECV_TIMEOUT ->
         mochiweb_socket:close(Socket),

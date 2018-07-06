@@ -117,8 +117,7 @@ parse_options([{backlog, Backlog} | Rest], State) ->
     parse_options(Rest, State#mochiweb_socket_server{backlog=Backlog});
 parse_options([{nodelay, NoDelay} | Rest], State) ->
     parse_options(Rest, State#mochiweb_socket_server{nodelay=NoDelay});
-parse_options([{recbuf, RecBuf} | Rest], State) when is_integer(RecBuf) orelse
-                                                RecBuf == undefined ->
+parse_options([{recbuf, RecBuf} | Rest], State) when is_integer(RecBuf) ->
     %% XXX: `recbuf' value which is passed to `gen_tcp'
     %% and value reported by `inet:getopts(P, [recbuf])' may
     %% differ. They depends on underlying OS. From linux mans:
@@ -128,9 +127,6 @@ parse_options([{recbuf, RecBuf} | Rest], State) when is_integer(RecBuf) orelse
     %% and this doubled value is returned by getsockopt(2).
     %%
     %% See: man 7 socket | grep SO_RCVBUF
-    %%
-    %% In case undefined is passed instead of the default buffer
-    %% size ?RECBUF_SIZE, no size is set and the OS can control it dynamically
     parse_options(Rest, State#mochiweb_socket_server{recbuf=RecBuf});
 parse_options([{acceptor_pool_size, Max} | Rest], State) ->
     MaxInt = ensure_int(Max),
@@ -186,6 +182,7 @@ init(State=#mochiweb_socket_server{ip=Ip, port=Port, backlog=Backlog,
                 {reuseaddr, true},
                 {packet, 0},
                 {backlog, Backlog},
+                {recbuf, RecBuf},
                 {exit_on_close, false},
                 {active, false},
                 {nodelay, NoDelay}],
@@ -200,13 +197,7 @@ init(State=#mochiweb_socket_server{ip=Ip, port=Port, backlog=Backlog,
         {_, _, _, _, _, _, _, _} -> % IPv6
             [inet6, {ip, Ip} | BaseOpts]
     end,
-    OptsBuf=case RecBuf of
-        undefined ->
-            Opts;
-        _ ->
-            [{recbuf, RecBuf}|Opts]
-    end,
-    listen(Port, OptsBuf, State).
+    listen(Port, Opts, State).
 
 new_acceptor_pool(State=#mochiweb_socket_server{acceptor_pool_size=Size}) ->
     lists:foldl(fun (_, S) -> new_acceptor(S) end, State, lists:seq(1, Size)).
